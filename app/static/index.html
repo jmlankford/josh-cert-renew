@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SSL Manager</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Navigation ───────────────────────────────────────────────────── -->
+  <nav id="nav">
+    <span class="nav-brand">⬡ SSL MANAGER</span>
+    <span class="nav-link active" data-view="domains-view">Domains</span>
+    <span class="nav-link" data-view="credentials-view">Credentials</span>
+    <span class="nav-link" data-view="history-view">Renewal History</span>
+  </nav>
+
+  <!-- ── Domains view ────────────────────────────────────────────────── -->
+  <div id="domains-view" class="view active">
+
+    <!-- Dashboard summary bar -->
+    <div id="summary-bar">
+      <div class="summary-stat" id="stat-total">
+        <span class="stat-label">Total Managed</span>
+        <span class="stat-value" id="stat-total-val">—</span>
+      </div>
+      <div class="summary-stat" id="stat-expiring" data-filter="expiring">
+        <span class="stat-label">Expiring (30d)</span>
+        <span class="stat-value amber" id="stat-expiring-val">—</span>
+      </div>
+      <div class="summary-stat" id="stat-expired" data-filter="expired">
+        <span class="stat-label">Expired</span>
+        <span class="stat-value red" id="stat-expired-val">—</span>
+      </div>
+      <div class="summary-stat" id="stat-never" data-filter="never">
+        <span class="stat-label">Never Issued</span>
+        <span class="stat-value red" id="stat-never-val">—</span>
+      </div>
+      <div class="summary-stat" id="last-run-stat">
+        <span class="stat-label">Last Auto-Renewal</span>
+        <span class="stat-value" id="stat-last-run">—</span>
+      </div>
+    </div>
+
+    <!-- Page header -->
+    <div class="page-header">
+      <span class="page-title">Managed Domains</span>
+      <button class="btn-primary" id="add-domain-btn">+ Add Domain</button>
+    </div>
+
+    <!-- Filter bar -->
+    <div id="filter-bar">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="expiring">Expiring Soon</button>
+      <button class="filter-btn" data-filter="expired">Expired</button>
+      <button class="filter-btn" data-filter="never">Never Issued</button>
+      <input type="text" id="search-input" placeholder="Search domains…" />
+    </div>
+
+    <!-- Domain table -->
+    <div class="table-wrap">
+      <table id="domain-table">
+        <thead>
+          <tr>
+            <th data-col="fqdn">Domain <span class="sort-arrow">↕</span></th>
+            <th data-col="record_type">Record Type <span class="sort-arrow">↕</span></th>
+            <th data-col="expiry_date">Expiration <span class="sort-arrow">↕</span></th>
+            <th data-col="profile">Profile <span class="sort-arrow">↕</span></th>
+            <th data-col="status">Status <span class="sort-arrow">↕</span></th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="domain-tbody"></tbody>
+      </table>
+      <div id="domains-empty" class="empty-state hidden">
+        <div class="empty-icon">▣</div>
+        <div>No domains match the current filter.</div>
+      </div>
+    </div>
+  </div><!-- /domains-view -->
+
+  <!-- ── Credentials view ─────────────────────────────────────────────── -->
+  <div id="credentials-view" class="view">
+
+    <!-- Cloudflare Zones -->
+    <div class="creds-section">
+      <div class="section-header">
+        <span class="section-title">Cloudflare Zones</span>
+        <button class="btn-primary" id="add-cf-btn">+ Add Zone</button>
+      </div>
+      <div class="table-wrap">
+        <table id="cf-table" class="creds-table">
+          <thead>
+            <tr>
+              <th>Zone Name</th>
+              <th>Zone ID</th>
+              <th>API Token</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="cf-tbody"></tbody>
+        </table>
+        <div id="cf-empty" class="empty-state hidden">
+          <div class="empty-icon">▣</div>
+          <div>No Cloudflare zones configured.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- cPanel Profiles -->
+    <div class="creds-section">
+      <div class="section-header">
+        <span class="section-title">cPanel Hosting Profiles</span>
+        <button class="btn-primary" id="add-cp-btn">+ Add Profile</button>
+      </div>
+      <div class="table-wrap">
+        <table id="cp-table" class="creds-table">
+          <thead>
+            <tr>
+              <th>Profile Name</th>
+              <th>Hostname</th>
+              <th>Username</th>
+              <th>Auth</th>
+              <th>Credential</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="cp-tbody"></tbody>
+        </table>
+        <div id="cp-empty" class="empty-state hidden">
+          <div class="empty-icon">▣</div>
+          <div>No cPanel profiles configured.</div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /credentials-view -->
+
+  <!-- ── History view ────────────────────────────────────────────────── -->
+  <div id="history-view" class="view">
+    <div class="page-header">
+      <span class="page-title">Renewal History</span>
+      <button class="btn-danger" id="clear-history-btn">Clear History</button>
+    </div>
+    <div class="history-filters">
+      <input type="text" id="history-search" placeholder="Filter by domain…" />
+      <select id="history-result-filter" class="form-select" style="width:140px">
+        <option value="">All results</option>
+        <option value="success">Success</option>
+        <option value="failure">Failure</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table id="history-table">
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Domain</th>
+            <th>Result</th>
+            <th>Triggered By</th>
+            <th>Log</th>
+          </tr>
+        </thead>
+        <tbody id="history-tbody"></tbody>
+      </table>
+      <div id="history-empty" class="empty-state hidden">
+        <div class="empty-icon">▣</div>
+        <div>No renewal history yet.</div>
+      </div>
+    </div>
+  </div><!-- /history-view -->
+
+</div><!-- /#app -->
+
+<!-- ════════════════════════════════════════════════════════════════════════════ -->
+<!-- MODALS                                                                   -->
+<!-- ════════════════════════════════════════════════════════════════════════════ -->
+
+<!-- Add Domain modal -->
+<div class="modal-overlay hidden" id="add-domain-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Add Domain</span>
+      <button class="modal-close" id="close-add-domain">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Root Domain</label>
+        <input class="form-input" id="ad-root" type="text" placeholder="bloomandrose.com" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Record Type</label>
+        <div class="radio-group">
+          <label class="radio-option">
+            <input type="radio" name="ad-record-type" value="apex" checked /> APEX (root domain)
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="ad-record-type" value="subdomain" /> Subdomain
+          </label>
+        </div>
+      </div>
+      <div class="form-group hidden" id="ad-subdomain-group">
+        <label class="form-label">Subdomain Label</label>
+        <input class="form-input" id="ad-subdomain" type="text" placeholder="www" />
+      </div>
+      <div class="form-fqdn-preview" id="ad-fqdn-preview"></div>
+      <div class="form-group" id="ad-wildcard-group">
+        <label class="checkbox-option">
+          <input type="checkbox" id="ad-wildcard" />
+          Issue wildcard cert (*.example.com) — covers all subdomains
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Hosting Profile</label>
+        <select class="form-select" id="ad-profile"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Cloudflare Zone</label>
+        <select class="form-select" id="ad-cf-zone"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Deploy Target</label>
+        <select class="form-select" id="ad-deploy-target">
+          <option value="cpanel">cPanel (cpanel_uapi)</option>
+          <option value="homelab">Homelab — file copy (Coming Soon)</option>
+        </select>
+      </div>
+      <div id="ad-error" class="error-banner hidden"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" id="cancel-add-domain">Cancel</button>
+      <button class="btn-primary" id="save-add-domain">Save Domain</button>
+    </div>
+  </div>
+</div>
+
+<!-- Live log modal -->
+<div class="modal-overlay hidden" id="log-overlay">
+  <div class="modal modal-log">
+    <div class="modal-header">
+      <span class="modal-title" id="log-modal-title">Certificate Operation</span>
+      <button class="modal-close" id="close-log">✕</button>
+    </div>
+    <div class="modal-body" style="padding:0">
+      <div id="log-terminal"></div>
+      <div id="log-status-bar">
+        <div class="log-spinner" id="log-spinner"></div>
+        <span id="log-status-text">Running…</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" id="close-log-btn" disabled>Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Cloudflare Zone modal -->
+<div class="modal-overlay hidden" id="cf-modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="cf-modal-title">Add Cloudflare Zone</span>
+      <button class="modal-close" id="close-cf-modal">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Zone Name</label>
+        <input class="form-input" id="cf-zone-name" type="text" placeholder="bloomandrose.com" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Cloudflare Zone ID</label>
+        <input class="form-input" id="cf-zone-id" type="text" placeholder="e.g. abc123def456..." />
+      </div>
+      <div class="form-group">
+        <label class="form-label">API Token</label>
+        <input class="form-input" id="cf-token" type="password" placeholder="Write-once — never shown again" />
+        <div class="form-hint">Requires DNS:Edit permission on this zone.</div>
+      </div>
+      <div id="cf-modal-error" class="error-banner hidden"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" id="cancel-cf-modal">Cancel</button>
+      <button class="btn-primary" id="save-cf-modal">Save Zone</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add cPanel Profile modal -->
+<div class="modal-overlay hidden" id="cp-modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="cp-modal-title">Add cPanel Profile</span>
+      <button class="modal-close" id="close-cp-modal">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Profile Name</label>
+        <input class="form-input" id="cp-name" type="text" placeholder="Namecheap Main" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">cPanel Hostname</label>
+        <input class="form-input" id="cp-hostname" type="text" placeholder="server123.web-hosting.com" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">cPanel Username</label>
+        <input class="form-input" id="cp-username" type="text" placeholder="cpanelusername" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Auth Method</label>
+        <div class="auth-toggle">
+          <button class="auth-toggle-btn active" data-auth="api_token">API Token</button>
+          <button class="auth-toggle-btn" data-auth="password">Password</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" id="cp-cred-label">API Token</label>
+        <input class="form-input" id="cp-credential" type="password" placeholder="Write-once — never shown again" />
+      </div>
+      <div id="cp-modal-error" class="error-banner hidden"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" id="cancel-cp-modal">Cancel</button>
+      <button class="btn-primary" id="save-cp-modal">Save Profile</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirmation modal -->
+<div class="modal-overlay hidden" id="confirm-overlay">
+  <div class="modal confirm-modal">
+    <div class="modal-header">
+      <span class="modal-title" id="confirm-title">Confirm</span>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-message" style="font-size:13px;color:var(--text)"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" id="confirm-cancel">Cancel</button>
+      <button class="btn-danger" id="confirm-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
