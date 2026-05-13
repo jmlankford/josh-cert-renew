@@ -1,6 +1,7 @@
 services:
   ssl-manager:
     build: .
+    image: josh-certrenew:latest
     container_name: josh-certrenew
     restart: unless-stopped
     ports:
