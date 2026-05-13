@@ -113,62 +113,72 @@ async def deploy_cert(
     credential: str,
 ) -> AsyncGenerator[tuple[str, int], None]:
     """
-    Deploy an already-issued certificate to cPanel via cpanel_uapi deploy hook.
+    Deploy an already-issued certificate to cPanel via its UAPI HTTP endpoint.
+    acme.sh's cpanel_uapi deploy hook requires the uapi CLI on the cPanel server
+    itself; this instead POSTs directly to https://{host}:2083/execute/SSL/install_ssl.
     Yields (log_line, returncode) — returncode == -1 until the final tuple.
     """
-    cmd = [
-        ACME_SH,
-        "--home", ACME_HOME,
-        "--deploy",
-        "--deploy-hook", "cpanel_uapi",
-        "-d", fqdn,
-    ]
-    env: dict = {
-        "CPANEL_HOST": cpanel_hostname,
-        "CPANEL_PORT": "2083",
-        "CPANEL_USERNAME": cpanel_username,
-    }
-    if auth_method == "api_token":
-        env["CPANEL_APITOKEN"] = credential
-    else:
-        env["CPANEL_PASSWORD"] = credential
+    import httpx
 
-    return _stream(cmd, env)
+    # acme.sh stores ECC certs in {fqdn}_ecc, RSA certs in {fqdn}
+    ecc_dir = os.path.join(ACME_HOME, f"{fqdn}_ecc")
+    rsa_dir = os.path.join(ACME_HOME, fqdn)
+    cert_dir = ecc_dir if os.path.isdir(ecc_dir) else rsa_dir
+
+    cert_file = os.path.join(cert_dir, f"{fqdn}.cer")
+    key_file  = os.path.join(cert_dir, f"{fqdn}.key")
+    ca_file   = os.path.join(cert_dir, "ca.cer")
+
+    try:
+        cert      = open(cert_file).read()
+        key       = open(key_file).read()
+        cabundle  = open(ca_file).read() if os.path.exists(ca_file) else ""
+    except FileNotFoundError as exc:
+        yield (f"[{_ts()}] ERROR reading cert files: {exc}", -1)
+        yield ("", 1)
+        return
+
+    url = f"https://{cpanel_hostname}:2083/execute/SSL/install_ssl"
+    headers = {"Authorization": f"cpanel {cpanel_username}:{credential}"} if auth_method == "api_token" else {}
+    auth    = None if auth_method == "api_token" else (cpanel_username, credential)
+
+    yield (f"[{_ts()}] Installing certificate for {fqdn} via cPanel UAPI HTTP…", -1)
+
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=30) as client:
+            resp = await client.post(
+                url, headers=headers, auth=auth,
+                data={"domain": fqdn, "cert": cert, "key": key, "cabundle": cabundle},
+            )
+        data = resp.json()
+        if data.get("status") == 1:
+            yield (f"[{_ts()}] Certificate installed successfully on cPanel.", -1)
+            yield ("", 0)
+        else:
+            errors = data.get("errors") or [str(data)]
+            yield (f"[{_ts()}] cPanel API error: {'; '.join(str(e) for e in errors)}", -1)
+            yield ("", 1)
+    except Exception as exc:
+        yield (f"[{_ts()}] Deploy request failed: {exc}", -1)
+        yield ("", 1)
 
 
 def parse_expiry_from_acme_info(fqdn: str) -> datetime | None:
     """
-    Read the acme.sh cert info for *fqdn* and return the expiry datetime.
-    Returns None if the cert directory or notAfter field is not found.
+    Read the cert file for *fqdn* and return the expiry datetime.
+    Returns None if the cert file is not found.
     """
     import subprocess
 
-    result = subprocess.run(
-        [ACME_SH, "--home", ACME_HOME, "--info", "-d", fqdn],
-        capture_output=True,
-        text=True,
-    )
-    for line in result.stdout.splitlines():
-        if line.startswith("Le_NextRenewTime=") or line.startswith("Le_CertCreateTimeStr="):
-            pass
-        if "Le_CertCreateTimeStr" in line:
-            # acme.sh stores human-readable date in this field after issuance
-            pass
-
-    # acme.sh --info outputs fields like:
-    #   Le_CertCreateTimeStr='Thu 01 Jan 2026 00:00:00 UTC'
-    # The most reliable approach is to read the cert directly.
-    cert_file = os.path.join(ACME_HOME, fqdn, f"{fqdn}.cer")
-    if not os.path.exists(cert_file):
-        # Try without tld path variants
-        for entry in os.listdir(ACME_HOME) if os.path.isdir(ACME_HOME) else []:
-            if entry.startswith(fqdn):
-                candidate = os.path.join(ACME_HOME, entry, f"{fqdn}.cer")
-                if os.path.exists(candidate):
-                    cert_file = candidate
-                    break
-        else:
-            return None
+    # Check ECC dir first, then RSA dir
+    ecc_cert = os.path.join(ACME_HOME, f"{fqdn}_ecc", f"{fqdn}.cer")
+    rsa_cert  = os.path.join(ACME_HOME, fqdn, f"{fqdn}.cer")
+    if os.path.exists(ecc_cert):
+        cert_file = ecc_cert
+    elif os.path.exists(rsa_cert):
+        cert_file = rsa_cert
+    else:
+        return None
 
     result = subprocess.run(
         ["openssl", "x509", "-enddate", "-noout", "-in", cert_file],

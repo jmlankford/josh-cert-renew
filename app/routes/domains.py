@@ -25,7 +25,7 @@ from app.services.crypto import decrypt
 router = APIRouter(prefix="/api/domains", tags=["domains"])
 
 
-# ── Pydantic schemas ─────────────────────────────────────────────
+# ── Pydantic schemas ──────────────────────────────────────────────────────────────
 
 class DomainCreate(BaseModel):
     root_domain: str
@@ -77,7 +77,7 @@ def _build_fqdn(root: str, subdomain: str | None) -> str:
     return f"{subdomain.lower().strip()}.{root}"
 
 
-# ── CRUD ──────────────────────────────────────────────────────
+# ── CRUD ──────────────────────────────────────────────────────────────────
 
 @router.get("")
 def list_domains(db: Session = Depends(get_db)):
@@ -121,7 +121,7 @@ def delete_domain(domain_id: int, db: Session = Depends(get_db)):
     db.commit()
 
 
-# ── SSE helpers ───────────────────────────────────────────────
+# ── SSE helpers ─────────────────────────────────────────────────────────────────
 
 async def _collect_logs_and_rc(stream) -> tuple[list[str], int]:
     """Drain an acme async generator, return (log_lines, exit_code)."""
@@ -176,7 +176,7 @@ def _make_sse_generator(
 
             yield {"data": json.dumps({"type": "log", "line": f"[{ts()}] Starting {operation} for {domain.fqdn}…"})}
 
-            # ── Issue / Renew ─────────────────────────────────────
+            # ── Issue / Renew ──────────────────────────────────────────────────
             all_logs: list[str] = []
 
             if operation == "issue":
@@ -199,9 +199,9 @@ def _make_sse_generator(
             if rc != 0:
                 raise RuntimeError(f"acme.sh exited with code {rc}")
 
-            # ── Deploy ──────────────────────────────────────────
+            # ── Deploy ──────────────────────────────────────────────────
             if domain.deploy_target == "cpanel":
-                yield {"data": json.dumps({"type": "log", "line": f"[{ts()}] Deploying via cpanel_uapi…"})}
+                yield {"data": json.dumps({"type": "log", "line": f"[{ts()}] Deploying certificate to cPanel…"})}
                 deploy_stream = await acme_svc.deploy_cert(
                     domain.fqdn,
                     profile.cpanel_hostname,
@@ -222,7 +222,7 @@ def _make_sse_generator(
             else:
                 yield {"data": json.dumps({"type": "log", "line": f"[{ts()}] Deploy target is 'homelab' — skipping (Coming Soon)"})}
 
-            # ── Success ──────────────────────────────────────────
+            # ── Success ──────────────────────────────────────────────────
             expiry = acme_svc.parse_expiry_from_acme_info(domain.fqdn)
             domain.status = "ACTIVE"
             domain.expiry_date = expiry
@@ -269,7 +269,7 @@ def _make_sse_generator(
     return _gen()
 
 
-# ── SSE endpoints ───────────────────────────────────────────────
+# ── SSE endpoints ───────────────────────────────────────────────────────────────
 
 @router.get("/{domain_id}/issue")
 async def issue_domain(domain_id: int, db: Session = Depends(get_db)):
