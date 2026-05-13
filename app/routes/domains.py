@@ -196,7 +196,9 @@ def _make_sse_generator(
                 if returncode != -1:
                     rc = returncode
 
-            if rc != 0:
+            if rc == 2:
+                yield {"data": json.dumps({"type": "log", "line": f"[{ts()}] Cert already valid — deploying existing cert…"})}
+            elif rc != 0:
                 raise RuntimeError(f"acme.sh exited with code {rc}")
 
             # ── Deploy ──────────────────────────────────────────────────
