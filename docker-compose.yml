@@ -1,0 +1,14 @@
+services:
+  ssl-manager:
+    build: .
+    container_name: josh-certrenew
+    restart: unless-stopped
+    ports:
+      - "11518:8443"
+    env_file:
+      - .env
+    volumes:
+      # SQLite database — persists across rebuilds and Portainer stack updates
+      - /mnt/user/appdata/JOSH-OS/certrenew/db:/app/data
+      # acme.sh config, issued certs, and account keys — must survive rebuilds
+      - /mnt/user/appdata/JOSH-OS/certrenew/acme:/root/.acme.sh
