@@ -5,7 +5,8 @@ All certificate operations run acme.sh as a subprocess. stdout and stderr are
 merged and streamed line-by-line so the caller can forward them to the frontend
 via Server-Sent Events.
 
-acme.sh is installed at /root/.acme.sh/acme.sh inside the container.
+acme.sh binary lives at /opt/acme.sh/acme.sh (never bind-mounted).
+Cert data and account config are stored in /root/.acme.sh (bind-mounted volume).
 """
 
 import asyncio
@@ -13,7 +14,7 @@ import os
 from datetime import datetime
 from typing import AsyncGenerator
 
-ACME_SH = "/root/.acme.sh/acme.sh"
+ACME_SH = "/opt/acme.sh/acme.sh"
 ACME_HOME = "/root/.acme.sh"
 
 
