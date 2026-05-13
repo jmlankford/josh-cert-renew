@@ -16,6 +16,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.responses import FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 
@@ -30,7 +31,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# ── Startup validation ────────────────────────────────────────────
+# ── Startup validation ─────────────────────────────────────────────────────────
 
 def _require_env(name: str) -> str:
     value = os.environ.get(name, "").strip()
@@ -48,7 +49,7 @@ _ADMIN_PASSWORD = _require_env("ADMIN_PASSWORD")
 _MASTER_SECRET = _require_env("MASTER_SECRET")  # also initialises crypto module
 
 
-# ── HTTP Basic Auth ──────────────────────────────────────────────
+# ── HTTP Basic Auth ────────────────────────────────────────────────────────────
 
 _security = HTTPBasic()
 
@@ -66,7 +67,7 @@ def require_auth(credentials: HTTPBasicCredentials = Depends(_security)):
     return credentials.username
 
 
-# ── Application lifespan ───────────────────────────────────────────
+# ── Application lifespan ─────────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -78,7 +79,7 @@ async def lifespan(app: FastAPI):
     logger.info("Scheduler stopped")
 
 
-# ── FastAPI app ────────────────────────────────────────────────
+# ── FastAPI app ──────────────────────────────────────────────────────────────
 
 app = FastAPI(
     title="SSL Certificate Manager",
@@ -89,7 +90,7 @@ app = FastAPI(
 )
 
 
-# ── API routes (auth-gated) ───────────────────────────────────────────
+# ── API routes (auth-gated) ─────────────────────────────────────────────────────────
 
 _auth_dep = [Depends(require_auth)]
 
@@ -99,10 +100,18 @@ app.include_router(history.router, dependencies=_auth_dep)
 app.include_router(dashboard.router, dependencies=_auth_dep)
 
 
-# ── Static SPA ────────────────────────────────────────────────
-# Served last so /api/* routes take priority.
-# The browser's Basic Auth prompt covers the SPA automatically because the
-# first API call the page makes will trigger the 401 challenge.
+# ── Static SPA ──────────────────────────────────────────────────────────────
+# index.html is served from an auth-gated route so the browser shows its
+# native Basic Auth dialog before the SPA loads. Once the user authenticates,
+# the browser includes credentials on all subsequent fetch() calls to the same
+# origin. JS/CSS assets are served unauthenticated from /static/ since they
+# contain no sensitive data and the browser won't attach credentials to them
+# until after the initial auth challenge on /.
 
 _static_dir = os.path.join(os.path.dirname(__file__), "static")
-app.mount("/", StaticFiles(directory=_static_dir, html=True), name="static")
+app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+
+
+@app.get("/", dependencies=[Depends(require_auth)], include_in_schema=False)
+async def spa_root():
+    return FileResponse(os.path.join(_static_dir, "index.html"))

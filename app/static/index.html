@@ -4,12 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SSL Manager</title>
-  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
 <div id="app">
 
-  <!-- ── Navigation ───────────────────────────────────────────────────── -->
+  <!-- ── Navigation ─────────────────────────────────────────────────────────── -->
   <nav id="nav">
     <span class="nav-brand">⬡ SSL MANAGER</span>
     <span class="nav-link active" data-view="domains-view">Domains</span>
@@ -17,7 +17,7 @@
     <span class="nav-link" data-view="history-view">Renewal History</span>
   </nav>
 
-  <!-- ── Domains view ────────────────────────────────────────────────── -->
+  <!-- ── Domains view ─────────────────────────────────────────────────────────── -->
   <div id="domains-view" class="view active">
 
     <!-- Dashboard summary bar -->
@@ -81,7 +81,7 @@
     </div>
   </div><!-- /domains-view -->
 
-  <!-- ── Credentials view ─────────────────────────────────────────────── -->
+  <!-- ── Credentials view ────────────────────────────────────────────────────────── -->
   <div id="credentials-view" class="view">
 
     <!-- Cloudflare Zones -->
@@ -137,7 +137,7 @@
     </div>
   </div><!-- /credentials-view -->
 
-  <!-- ── History view ────────────────────────────────────────────────── -->
+  <!-- ── History view ───────────────────────────────────────────────────────────── -->
   <div id="history-view" class="view">
     <div class="page-header">
       <span class="page-title">Renewal History</span>
@@ -173,9 +173,9 @@
 
 </div><!-- /#app -->
 
-<!-- ════════════════════════════════════════════════════════════════════════════ -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
 <!-- MODALS                                                                   -->
-<!-- ════════════════════════════════════════════════════════════════════════════ -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
 
 <!-- Add Domain modal -->
 <div class="modal-overlay hidden" id="add-domain-overlay">
@@ -223,7 +223,7 @@
         <label class="form-label">Deploy Target</label>
         <select class="form-select" id="ad-deploy-target">
           <option value="cpanel">cPanel (cpanel_uapi)</option>
-          <option value="homelab">Homelab — file copy (Coming Soon)</option>
+          <option value="homelab">Homelab — file copy <span class="coming-soon">(Coming Soon)</span></option>
         </select>
       </div>
       <div id="ad-error" class="error-banner hidden"></div>
@@ -341,6 +341,6 @@
   </div>
 </div>
 
-<script src="/app.js"></script>
+<script src="/static/app.js"></script>
 </body>
 </html>
