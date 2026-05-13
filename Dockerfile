@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-# ── System dependencies required by acme.sh ────────────────────────────────────
+# ── System dependencies required by acme.sh ──────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
       curl \
       git \
@@ -9,28 +9,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Install acme.sh pinned to v3.0.7 ──────────────────────────────────────────
-# --install-online is intentionally NOT used so the tag is honoured exactly.
-# We clone the specific tag and run the installer so acme.sh writes its config
-# and default CA setting into /root/.acme.sh (which is bind-mounted at runtime).
+# ── Install acme.sh pinned to v3.0.7 ─────────────────────────────────────────
+# Skip the installer (sets up cron/shell aliases not needed in Docker).
+# Copy acme.sh and support directories directly from the release tarball.
+# --server letsencrypt is passed explicitly on every issue/renew call.
 ARG ACME_VERSION=3.0.7
 RUN curl -sSL \
       "https://github.com/acmesh-official/acme.sh/archive/refs/tags/${ACME_VERSION}.tar.gz" \
     | tar -xz -C /tmp \
-    && /tmp/acme.sh-${ACME_VERSION}/acme.sh \
-         --install \
-         --home /root/.acme.sh \
-         --nocron \
+    && mkdir -p /root/.acme.sh \
+    && cp /tmp/acme.sh-${ACME_VERSION}/acme.sh /root/.acme.sh/acme.sh \
+    && cp -r /tmp/acme.sh-${ACME_VERSION}/deploy /root/.acme.sh/deploy \
+    && cp -r /tmp/acme.sh-${ACME_VERSION}/dnsapi /root/.acme.sh/dnsapi \
+    && chmod +x /root/.acme.sh/acme.sh \
     && rm -rf /tmp/acme.sh-${ACME_VERSION}
 
-# ── Set Let's Encrypt as default CA ───────────────────────────────────────────
-# This writes to /root/.acme.sh/account.conf. The bind-mounted volume at
-# /root/.acme.sh will persist this setting across container rebuilds.
-RUN /root/.acme.sh/acme.sh \
-      --set-default-ca \
-      --server letsencrypt
-
-# ── Python application ─────────────────────────────────────────────────────────
+# ── Python application ───────────────────────────────────────────────────────
 WORKDIR /app
 
 COPY requirements.txt .
