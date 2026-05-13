@@ -1,6 +1,5 @@
 services:
   ssl-manager:
-    build: .
     image: ghcr.io/jmlankford/josh-cert-renew:latest
     container_name: josh-certrenew
     restart: unless-stopped
