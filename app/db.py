@@ -28,5 +28,12 @@ def get_db():
 
 
 def init_db() -> None:
-    from app.models import domain, credential, history  # noqa: F401 – side-effect imports register ORM classes
+    from app.models import domain, credential, history  # noqa: F401
     Base.metadata.create_all(bind=engine)
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE cpanel_profiles ADD COLUMN addon_domain_suffix VARCHAR"))
+            conn.commit()
+        except Exception:
+            pass  # column already exists

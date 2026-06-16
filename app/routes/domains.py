@@ -25,15 +25,13 @@ from app.services.crypto import decrypt
 router = APIRouter(prefix="/api/domains", tags=["domains"])
 
 
-# ── Pydantic schemas ──────────────────────────────────────────────────────────────
-
 class DomainCreate(BaseModel):
     root_domain: str
-    subdomain: str | None = None        # None → APEX
+    subdomain: str | None = None
     is_wildcard: bool = False
     cpanel_profile_id: int
     cloudflare_zone_id: int
-    deploy_target: str = "cpanel"       # "cpanel" | "homelab"
+    deploy_target: str = "cpanel"
 
 
 class DomainOut(BaseModel):
@@ -77,8 +75,6 @@ def _build_fqdn(root: str, subdomain: str | None) -> str:
     return f"{subdomain.lower().strip()}.{root}"
 
 
-# ── CRUD ──────────────────────────────────────────────────────────────────
-
 @router.get("")
 def list_domains(db: Session = Depends(get_db)):
     domains = db.query(Domain).order_by(Domain.root_domain, Domain.subdomain).all()
@@ -93,7 +89,6 @@ def create_domain(payload: DomainCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=409, detail=f"Domain '{fqdn}' is already managed")
 
-    # Wildcards only make sense on APEX records
     is_wildcard = payload.is_wildcard and payload.subdomain is None
 
     domain = Domain(
@@ -121,10 +116,7 @@ def delete_domain(domain_id: int, db: Session = Depends(get_db)):
     db.commit()
 
 
-# ── SSE helpers ─────────────────────────────────────────────────────────────────
-
 async def _collect_logs_and_rc(stream) -> tuple[list[str], int]:
-    """Drain an acme async generator, return (log_lines, exit_code)."""
     lines: list[str] = []
     rc = -1
     async for line, returncode in stream:
@@ -137,15 +129,9 @@ async def _collect_logs_and_rc(stream) -> tuple[list[str], int]:
 
 def _make_sse_generator(
     domain_id: int,
-    operation: str,   # "issue" | "renew"
+    operation: str,
     db_factory,
 ) -> AsyncGenerator:
-    """
-    Returns an async generator that:
-    1. Streams acme.sh output as SSE data events.
-    2. On completion writes a RenewalHistory record and updates the domain.
-    """
-
     async def _gen():
         db: Session = db_factory()
         acme_email = os.environ.get("ACME_EMAIL", "")
@@ -176,7 +162,6 @@ def _make_sse_generator(
 
             yield {"data": json.dumps({"type": "log", "line": f"[{ts()}] Starting {operation} for {domain.fqdn}…"})}
 
-            # ── Issue / Renew ──────────────────────────────────────────────────
             all_logs: list[str] = []
 
             if operation == "issue":
@@ -196,20 +181,18 @@ def _make_sse_generator(
                 if returncode != -1:
                     rc = returncode
 
-            if rc == 2:
-                yield {"data": json.dumps({"type": "log", "line": f"[{ts()}] Cert already valid — deploying existing cert…"})}
-            elif rc != 0:
+            if rc != 0:
                 raise RuntimeError(f"acme.sh exited with code {rc}")
 
-            # ── Deploy ──────────────────────────────────────────────────
             if domain.deploy_target == "cpanel":
-                yield {"data": json.dumps({"type": "log", "line": f"[{ts()}] Deploying certificate to cPanel…"})}
+                yield {"data": json.dumps({"type": "log", "line": f"[{ts()}] Deploying via cpanel_uapi…"})}
                 deploy_stream = acme_svc.deploy_cert(
                     domain.fqdn,
                     profile.cpanel_hostname,
                     profile.cpanel_username,
                     profile.auth_method,
                     credential,
+                    addon_domain_suffix=profile.addon_domain_suffix,
                 )
                 rc2 = -1
                 async for line, returncode in deploy_stream:
@@ -224,7 +207,6 @@ def _make_sse_generator(
             else:
                 yield {"data": json.dumps({"type": "log", "line": f"[{ts()}] Deploy target is 'homelab' — skipping (Coming Soon)"})}
 
-            # ── Success ──────────────────────────────────────────────────
             expiry = acme_svc.parse_expiry_from_acme_info(domain.fqdn)
             domain.status = "ACTIVE"
             domain.expiry_date = expiry
@@ -271,15 +253,12 @@ def _make_sse_generator(
     return _gen()
 
 
-# ── SSE endpoints ───────────────────────────────────────────────────────────────
-
 @router.get("/{domain_id}/issue")
 async def issue_domain(domain_id: int, db: Session = Depends(get_db)):
     """Issue a new certificate. Streams acme.sh output via SSE."""
     domain = db.query(Domain).filter(Domain.id == domain_id).first()
     if not domain:
         raise HTTPException(status_code=404, detail="Domain not found")
-    # db session must be closed before streaming begins (SQLite locking)
     db.close()
     from app.db import SessionLocal
     return EventSourceResponse(_make_sse_generator(domain_id, "issue", SessionLocal))

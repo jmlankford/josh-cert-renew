@@ -31,7 +31,7 @@ class CFZoneCreate(BaseModel):
 
 class CFZoneUpdate(BaseModel):
     zone_name: str | None = None
-    cf_token: str | None = None     # omit to keep existing secret
+    cf_token: str | None = None
     cf_zone_id: str | None = None
 
 
@@ -110,8 +110,9 @@ class CPanelCreate(BaseModel):
     profile_name: str
     cpanel_hostname: str
     cpanel_username: str
-    auth_method: str        # "api_token" | "password"
+    auth_method: str
     credential: str
+    addon_domain_suffix: str | None = None
 
 
 class CPanelUpdate(BaseModel):
@@ -119,7 +120,8 @@ class CPanelUpdate(BaseModel):
     cpanel_hostname: str | None = None
     cpanel_username: str | None = None
     auth_method: str | None = None
-    credential: str | None = None   # omit to keep existing secret
+    credential: str | None = None
+    addon_domain_suffix: str | None = None
 
 
 def _serialise_cp(p: CPanelProfile) -> dict:
@@ -130,6 +132,7 @@ def _serialise_cp(p: CPanelProfile) -> dict:
         "cpanel_username": p.cpanel_username,
         "auth_method": p.auth_method,
         "credential": _MASKED,
+        "addon_domain_suffix": p.addon_domain_suffix or "",
         "created_at": p.created_at.isoformat(),
         "updated_at": p.updated_at.isoformat(),
     }
@@ -152,6 +155,7 @@ def create_cpanel_profile(payload: CPanelCreate, db: Session = Depends(get_db)):
         cpanel_username=payload.cpanel_username.strip(),
         auth_method=payload.auth_method,
         credential_encrypted=encrypt(payload.credential),
+        addon_domain_suffix=payload.addon_domain_suffix.strip().lower() if payload.addon_domain_suffix else None,
     )
     db.add(profile)
     db.commit()
@@ -177,6 +181,8 @@ def update_cpanel_profile(profile_id: int, payload: CPanelUpdate, db: Session = 
         profile.auth_method = payload.auth_method
     if payload.credential is not None and payload.credential not in (_MASKED, ""):
         profile.credential_encrypted = encrypt(payload.credential)
+    if payload.addon_domain_suffix is not None:
+        profile.addon_domain_suffix = payload.addon_domain_suffix.strip().lower() or None
 
     from datetime import datetime
     profile.updated_at = datetime.utcnow()

@@ -23,11 +23,6 @@ def _ts() -> str:
 
 
 async def _stream(cmd: list[str], env: dict) -> AsyncGenerator[tuple[str, int], None]:
-    """
-    Run *cmd* with the merged environment and yield (line, returncode) pairs.
-    returncode is -1 for every line except the final sentinel where it holds
-    the real exit code of the subprocess.
-    """
     full_env = {**os.environ, **env}
     process = await asyncio.create_subprocess_exec(
         *cmd,
@@ -44,7 +39,7 @@ async def _stream(cmd: list[str], env: dict) -> AsyncGenerator[tuple[str, int], 
         yield (f"[{_ts()}] {line}", -1)
 
     rc = await process.wait()
-    yield ("", rc)  # sentinel
+    yield ("", rc)
 
 
 async def issue_cert(
@@ -54,11 +49,6 @@ async def issue_cert(
     cf_zone_id: str,
     acme_email: str,
 ) -> AsyncGenerator[tuple[str, int], None]:
-    """
-    Issue a new certificate via Cloudflare DNS challenge.
-    For wildcard domains the command adds both *.root and root itself.
-    Yields (log_line, returncode) — returncode == -1 until the final tuple.
-    """
     cmd = [
         ACME_SH,
         "--home", ACME_HOME,
@@ -84,10 +74,6 @@ async def renew_cert(
     cf_zone_id: str,
     acme_email: str,
 ) -> AsyncGenerator[tuple[str, int], None]:
-    """
-    Force-renew an existing certificate.
-    Yields (log_line, returncode) — returncode == -1 until the final tuple.
-    """
     cmd = [
         ACME_SH,
         "--home", ACME_HOME,
@@ -111,16 +97,15 @@ async def deploy_cert(
     cpanel_username: str,
     auth_method: str,
     credential: str,
+    addon_domain_suffix: str | None = None,
 ) -> AsyncGenerator[tuple[str, int], None]:
     """
     Deploy an already-issued certificate to cPanel via its UAPI HTTP endpoint.
-    acme.sh's cpanel_uapi deploy hook requires the uapi CLI on the cPanel server
-    itself; this instead POSTs directly to https://{host}:2083/execute/SSL/install_ssl.
-    Yields (log_line, returncode) — returncode == -1 until the final tuple.
+    If addon_domain_suffix is set, also installs on the internal addon vhost
+    (e.g. darkrosedeli.lankamerica.com) so HTTPS activates for addon domains.
     """
     import httpx
 
-    # acme.sh stores ECC certs in {fqdn}_ecc, RSA certs in {fqdn}
     ecc_dir = os.path.join(ACME_HOME, f"{fqdn}_ecc")
     rsa_dir = os.path.join(ACME_HOME, fqdn)
     cert_dir = ecc_dir if os.path.isdir(ecc_dir) else rsa_dir
@@ -130,15 +115,15 @@ async def deploy_cert(
     ca_file   = os.path.join(cert_dir, "ca.cer")
 
     try:
-        cert      = open(cert_file).read()
-        key       = open(key_file).read()
-        cabundle  = open(ca_file).read() if os.path.exists(ca_file) else ""
+        cert     = open(cert_file).read()
+        key      = open(key_file).read()
+        cabundle = open(ca_file).read() if os.path.exists(ca_file) else ""
     except FileNotFoundError as exc:
         yield (f"[{_ts()}] ERROR reading cert files: {exc}", -1)
         yield ("", 1)
         return
 
-    url = f"https://{cpanel_hostname}:2083/execute/SSL/install_ssl"
+    url     = f"https://{cpanel_hostname}:2083/execute/SSL/install_ssl"
     headers = {"Authorization": f"cpanel {cpanel_username}:{credential}"} if auth_method == "api_token" else {}
     auth    = None if auth_method == "api_token" else (cpanel_username, credential)
 
@@ -150,27 +135,42 @@ async def deploy_cert(
                 url, headers=headers, auth=auth,
                 data={"domain": fqdn, "cert": cert, "key": key, "cabundle": cabundle},
             )
-        data = resp.json()
-        if data.get("status") == 1:
-            yield (f"[{_ts()}] Certificate installed successfully on cPanel.", -1)
-            yield ("", 0)
-        else:
-            errors = data.get("errors") or [str(data)]
-            yield (f"[{_ts()}] cPanel API error: {'; '.join(str(e) for e in errors)}", -1)
-            yield ("", 1)
+            data = resp.json()
+            if data.get("status") == 1:
+                yield (f"[{_ts()}] Certificate installed for {fqdn}.", -1)
+            else:
+                errors = data.get("errors") or [str(data)]
+                yield (f"[{_ts()}] cPanel API error: {'; '.join(str(e) for e in errors)}", -1)
+                yield ("", 1)
+                return
+
+            if addon_domain_suffix:
+                root_label  = fqdn.split(".")[0]
+                addon_vhost = f"{root_label}.{addon_domain_suffix}"
+                yield (f"[{_ts()}] Installing on addon vhost {addon_vhost}…", -1)
+                try:
+                    resp2 = await client.post(
+                        url, headers=headers, auth=auth,
+                        data={"domain": addon_vhost, "cert": cert, "key": key, "cabundle": cabundle},
+                    )
+                    data2 = resp2.json()
+                    if data2.get("status") == 1:
+                        yield (f"[{_ts()}] Addon vhost install successful.", -1)
+                    else:
+                        errors2 = data2.get("errors") or [str(data2)]
+                        yield (f"[{_ts()}] Addon vhost warning: {'; '.join(str(e) for e in errors2)}", -1)
+                except Exception as exc2:
+                    yield (f"[{_ts()}] Addon vhost install warning: {exc2}", -1)
+
+        yield ("", 0)
     except Exception as exc:
         yield (f"[{_ts()}] Deploy request failed: {exc}", -1)
         yield ("", 1)
 
 
 def parse_expiry_from_acme_info(fqdn: str) -> datetime | None:
-    """
-    Read the cert file for *fqdn* and return the expiry datetime.
-    Returns None if the cert file is not found.
-    """
     import subprocess
 
-    # Check ECC dir first, then RSA dir
     ecc_cert = os.path.join(ACME_HOME, f"{fqdn}_ecc", f"{fqdn}.cer")
     rsa_cert  = os.path.join(ACME_HOME, fqdn, f"{fqdn}.cer")
     if os.path.exists(ecc_cert):
@@ -185,7 +185,6 @@ def parse_expiry_from_acme_info(fqdn: str) -> datetime | None:
         capture_output=True,
         text=True,
     )
-    # output: notAfter=Jan  1 00:00:00 2026 GMT
     for line in result.stdout.splitlines():
         if line.startswith("notAfter="):
             date_str = line.split("=", 1)[1].strip()
