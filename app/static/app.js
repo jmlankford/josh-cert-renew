@@ -592,6 +592,7 @@ function renderCPTable() {
       <td class="td-mono" style="font-size:12px">${escHtml(p.cpanel_username)}</td>
       <td style="font-size:11px;color:var(--text-dim)">${p.auth_method === 'api_token' ? 'API Token' : 'Password'}</td>
       <td><span class="masked">${p.credential}</span></td>
+      <td style="font-size:11px;color:var(--text-dim)">${escHtml(p.addon_domain_suffix || '—')}</td>
       <td>
         <button class="btn-test" data-cp-test="${p.id}">Test</button>
         <button class="action-btn btn-renew" data-cp-edit="${p.id}">Edit</button>
@@ -633,12 +634,13 @@ document.getElementById('cp-tbody').addEventListener('click', async e => {
     state.cpAuthMethod = p.auth_method;
 
     document.getElementById('cp-modal-title').textContent = 'Edit cPanel Profile';
-    document.getElementById('cp-name').value     = p.profile_name;
-    document.getElementById('cp-hostname').value = p.cpanel_hostname;
-    document.getElementById('cp-username').value = p.cpanel_username;
-    document.getElementById('cp-credential').value = '';
+    document.getElementById('cp-name').value        = p.profile_name;
+    document.getElementById('cp-hostname').value    = p.cpanel_hostname;
+    document.getElementById('cp-username').value    = p.cpanel_username;
+    document.getElementById('cp-credential').value  = '';
     document.getElementById('cp-credential').placeholder = 'Leave blank to keep existing credential';
     document.getElementById('cp-cred-label').textContent = p.auth_method === 'api_token' ? 'API Token' : 'Password';
+    document.getElementById('cp-addon-suffix').value = p.addon_domain_suffix || '';
     updateAuthToggleUI();
     document.getElementById('cp-modal-error').classList.add('hidden');
     document.getElementById('cp-modal-overlay').classList.remove('hidden');
@@ -661,12 +663,13 @@ document.getElementById('add-cp-btn').addEventListener('click', () => {
   state.editingCpId = null;
   state.cpAuthMethod = 'api_token';
   document.getElementById('cp-modal-title').textContent = 'Add cPanel Profile';
-  document.getElementById('cp-name').value     = '';
-  document.getElementById('cp-hostname').value = '';
-  document.getElementById('cp-username').value = '';
-  document.getElementById('cp-credential').value = '';
+  document.getElementById('cp-name').value        = '';
+  document.getElementById('cp-hostname').value    = '';
+  document.getElementById('cp-username').value    = '';
+  document.getElementById('cp-credential').value  = '';
   document.getElementById('cp-credential').placeholder = 'Write-once — never shown again';
   document.getElementById('cp-cred-label').textContent = 'API Token';
+  document.getElementById('cp-addon-suffix').value = '';
   updateAuthToggleUI();
   document.getElementById('cp-modal-error').classList.add('hidden');
   cpOverlay.classList.remove('hidden');
@@ -691,11 +694,12 @@ function updateAuthToggleUI() {
 }
 
 document.getElementById('save-cp-modal').addEventListener('click', async () => {
-  const name       = document.getElementById('cp-name').value.trim();
-  const hostname   = document.getElementById('cp-hostname').value.trim();
-  const username   = document.getElementById('cp-username').value.trim();
-  const credential = document.getElementById('cp-credential').value.trim();
-  const errEl      = document.getElementById('cp-modal-error');
+  const name        = document.getElementById('cp-name').value.trim();
+  const hostname    = document.getElementById('cp-hostname').value.trim();
+  const username    = document.getElementById('cp-username').value.trim();
+  const credential  = document.getElementById('cp-credential').value.trim();
+  const addonSuffix = document.getElementById('cp-addon-suffix').value.trim();
+  const errEl       = document.getElementById('cp-modal-error');
 
   if (!name)     { showErr(errEl, 'Profile name is required.'); return; }
   if (!hostname) { showErr(errEl, 'Hostname is required.'); return; }
@@ -708,6 +712,7 @@ document.getElementById('save-cp-modal').addEventListener('click', async () => {
       cpanel_hostname: hostname,
       cpanel_username: username,
       auth_method: state.cpAuthMethod,
+      addon_domain_suffix: addonSuffix || null,
     };
     if (credential) body.credential = credential;
 

@@ -24,6 +24,7 @@ class CPanelProfile(Base):
     cpanel_username = Column(String, nullable=False)
     auth_method = Column(String, nullable=False)             # "api_token" | "password"
     credential_encrypted = Column(String, nullable=False)    # Fernet-encrypted API token or password
+    addon_domain_suffix = Column(String, nullable=True)      # e.g. "lankamerica.com" — primary domain for addon-domain hosts
 
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

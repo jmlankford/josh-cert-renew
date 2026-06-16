@@ -202,12 +202,13 @@ def _make_sse_generator(
             # ── Deploy ──────────────────────────────────────────
             if domain.deploy_target == "cpanel":
                 yield {"data": json.dumps({"type": "log", "line": f"[{ts()}] Deploying via cpanel_uapi…"})}
-                deploy_stream = await acme_svc.deploy_cert(
+                deploy_stream = acme_svc.deploy_cert(
                     domain.fqdn,
                     profile.cpanel_hostname,
                     profile.cpanel_username,
                     profile.auth_method,
                     credential,
+                    addon_domain_suffix=profile.addon_domain_suffix,
                 )
                 rc2 = -1
                 async for line, returncode in deploy_stream:

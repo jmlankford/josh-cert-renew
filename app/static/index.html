@@ -124,6 +124,7 @@
               <th>Username</th>
               <th>Auth</th>
               <th>Credential</th>
+              <th>Addon Suffix</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -315,6 +316,11 @@
       <div class="form-group">
         <label class="form-label" id="cp-cred-label">API Token</label>
         <input class="form-input" id="cp-credential" type="password" placeholder="Write-once — never shown again" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Addon Domain Suffix <span style="font-weight:400;color:var(--text-dim)">(optional)</span></label>
+        <input class="form-input" id="cp-addon-suffix" type="text" placeholder="e.g. lankamerica.com" />
+        <div class="form-hint">If set, certs are also installed on the internal addon vhost (e.g. darkrosedeli.lankamerica.com).</div>
       </div>
       <div id="cp-modal-error" class="error-banner hidden"></div>
     </div>
