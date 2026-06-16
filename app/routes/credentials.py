@@ -31,7 +31,7 @@ class CFZoneCreate(BaseModel):
 
 class CFZoneUpdate(BaseModel):
     zone_name: str | None = None
-    cf_token: str | None = None     # omit to keep existing secret
+    cf_token: str | None = None
     cf_zone_id: str | None = None
 
 
@@ -110,9 +110,9 @@ class CPanelCreate(BaseModel):
     profile_name: str
     cpanel_hostname: str
     cpanel_username: str
-    auth_method: str                    # "api_token" | "password"
+    auth_method: str
     credential: str
-    addon_domain_suffix: str | None = None  # e.g. "lankamerica.com"
+    addon_domain_suffix: str | None = None
 
 
 class CPanelUpdate(BaseModel):
@@ -120,7 +120,7 @@ class CPanelUpdate(BaseModel):
     cpanel_hostname: str | None = None
     cpanel_username: str | None = None
     auth_method: str | None = None
-    credential: str | None = None       # omit to keep existing secret
+    credential: str | None = None
     addon_domain_suffix: str | None = None
 
 

@@ -28,9 +28,8 @@ def get_db():
 
 
 def init_db() -> None:
-    from app.models import domain, credential, history  # noqa: F401 – side-effect imports register ORM classes
+    from app.models import domain, credential, history  # noqa: F401
     Base.metadata.create_all(bind=engine)
-    # Migrate: add addon_domain_suffix column if this is an existing DB that predates the column
     from sqlalchemy import text
     with engine.connect() as conn:
         try:

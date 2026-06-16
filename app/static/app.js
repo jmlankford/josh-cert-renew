@@ -13,7 +13,7 @@ const state = {
   cfZones: [],
   cpProfiles: [],
   history: [],
-  filter: 'all',        // 'all' | 'expiring' | 'expired' | 'never'
+  filter: 'all',
   search: '',
   sort: { col: 'fqdn', dir: 'asc' },
   editingCfId: null,
@@ -108,12 +108,10 @@ async function loadDashboard() {
   }
 }
 
-// Click on summary stats to filter the table
 document.querySelectorAll('.summary-stat[data-filter]').forEach(el => {
   el.addEventListener('click', () => {
     const f = el.dataset.filter;
     setFilter(f);
-    // Switch to domains view if not already there
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.querySelector('[data-view="domains-view"]').classList.add('active');
@@ -159,29 +157,22 @@ function getFilteredDomains() {
     .filter(d => {
       const search = state.search.toLowerCase();
       if (search && !d.fqdn.toLowerCase().includes(search)) return false;
-
       if (state.filter === 'all') return true;
       if (state.filter === 'never') return d.status === 'NEVER ISSUED';
-      if (state.filter === 'expired') {
-        return d.expiry_date && new Date(d.expiry_date) < now;
-      }
-      if (state.filter === 'expiring') {
-        return d.expiry_date && new Date(d.expiry_date) >= now && new Date(d.expiry_date) <= soon;
-      }
+      if (state.filter === 'expired') return d.expiry_date && new Date(d.expiry_date) < now;
+      if (state.filter === 'expiring') return d.expiry_date && new Date(d.expiry_date) >= now && new Date(d.expiry_date) <= soon;
       return true;
     })
     .sort((a, b) => {
       const col = state.sort.col;
       const dir = state.sort.dir === 'asc' ? 1 : -1;
       let va, vb;
-
-      if (col === 'fqdn')        { va = a.fqdn; vb = b.fqdn; }
+      if (col === 'fqdn')             { va = a.fqdn; vb = b.fqdn; }
       else if (col === 'record_type') { va = recordTypeLabel(a); vb = recordTypeLabel(b); }
       else if (col === 'expiry_date') { va = a.expiry_date || ''; vb = b.expiry_date || ''; }
-      else if (col === 'profile') { va = getProfileName(a.cpanel_profile_id); vb = getProfileName(b.cpanel_profile_id); }
-      else if (col === 'status')  { va = a.status; vb = b.status; }
-      else                        { va = ''; vb = ''; }
-
+      else if (col === 'profile')     { va = getProfileName(a.cpanel_profile_id); vb = getProfileName(b.cpanel_profile_id); }
+      else if (col === 'status')      { va = a.status; vb = b.status; }
+      else                            { va = ''; vb = ''; }
       return va < vb ? -dir : va > vb ? dir : 0;
     });
 }
@@ -205,17 +196,12 @@ function renderDomainTable() {
     const prof = getProfileName(d.cpanel_profile_id);
     const rec  = recordTypeLabel(d);
     const wildcard = d.is_wildcard ? ' <span title="Wildcard cert" style="color:var(--accent);font-size:10px">★</span>' : '';
-
     const issueBtn  = (d.status === 'NEVER ISSUED' || d.status === 'ERROR')
-      ? `<button class="action-btn btn-issue" data-action="issue" data-id="${d.id}" data-fqdn="${d.fqdn}">Issue</button>`
-      : '';
+      ? `<button class="action-btn btn-issue" data-action="issue" data-id="${d.id}" data-fqdn="${d.fqdn}">Issue</button>` : '';
     const renewBtn  = d.expiry_date || d.status === 'ACTIVE'
-      ? `<button class="action-btn btn-renew" data-action="renew" data-id="${d.id}" data-fqdn="${d.fqdn}">Renew</button>`
-      : '';
+      ? `<button class="action-btn btn-renew" data-action="renew" data-id="${d.id}" data-fqdn="${d.fqdn}">Renew</button>` : '';
     const deleteBtn = `<button class="action-btn btn-delete" data-action="delete" data-id="${d.id}" data-fqdn="${d.fqdn}">Delete</button>`;
-
     const delay = `animation-delay:${idx * 35}ms`;
-
     return `<tr style="${delay}">
       <td class="td-domain">${escHtml(d.fqdn)}${wildcard}</td>
       <td class="td-record">${escHtml(rec)}</td>
@@ -227,7 +213,6 @@ function renderDomainTable() {
   }).join('');
 }
 
-// Table column sort
 document.querySelectorAll('#domain-table thead th[data-col]').forEach(th => {
   th.addEventListener('click', () => {
     const col = th.dataset.col;
@@ -244,7 +229,6 @@ document.querySelectorAll('#domain-table thead th[data-col]').forEach(th => {
   });
 });
 
-// Filter buttons
 function setFilter(f) {
   state.filter = f;
   document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -262,14 +246,12 @@ document.getElementById('search-input').addEventListener('input', e => {
   renderDomainTable();
 });
 
-// Domain table action delegation
 document.getElementById('domain-tbody').addEventListener('click', async e => {
   const btn = e.target.closest('[data-action]');
   if (!btn) return;
   const action = btn.dataset.action;
   const id     = parseInt(btn.dataset.id);
   const fqdn   = btn.dataset.fqdn;
-
   if (action === 'delete') {
     confirm_(`Delete domain "${fqdn}"? The certificate is not revoked.`, async () => {
       await DELETE(`/api/domains/${id}`);
@@ -287,15 +269,12 @@ const addDomainOverlay = document.getElementById('add-domain-overlay');
 function openAddDomain() {
   const profSel = document.getElementById('ad-profile');
   const cfSel   = document.getElementById('ad-cf-zone');
-
   profSel.innerHTML = state.cpProfiles.length
     ? state.cpProfiles.map(p => `<option value="${p.id}">${escHtml(p.profile_name)}</option>`).join('')
     : '<option value="">— No profiles saved —</option>';
-
   cfSel.innerHTML = state.cfZones.length
     ? state.cfZones.map(z => `<option value="${z.id}">${escHtml(z.zone_name)}</option>`).join('')
     : '<option value="">— No zones saved —</option>';
-
   document.getElementById('ad-root').value    = '';
   document.getElementById('ad-subdomain').value = '';
   document.getElementById('ad-wildcard').checked = false;
@@ -304,7 +283,6 @@ function openAddDomain() {
   document.getElementById('ad-subdomain-group').classList.add('hidden');
   document.getElementById('ad-wildcard-group').classList.remove('hidden');
   document.getElementById('ad-error').classList.add('hidden');
-
   addDomainOverlay.classList.remove('hidden');
 }
 
@@ -326,7 +304,6 @@ function updateFqdnPreview() {
   const isApex = document.querySelector('[name="ad-record-type"]:checked').value === 'apex';
   const sub = document.getElementById('ad-subdomain').value.trim().toLowerCase();
   const preview = document.getElementById('ad-fqdn-preview');
-
   if (!root) { preview.textContent = ''; return; }
   const fqdn = isApex ? root : (sub ? `${sub}.${root}` : root);
   preview.textContent = `→ ${fqdn}`;
@@ -344,21 +321,12 @@ document.getElementById('save-add-domain').addEventListener('click', async () =>
   const zoneId    = parseInt(document.getElementById('ad-cf-zone').value);
   const deployTgt = document.getElementById('ad-deploy-target').value;
   const errEl     = document.getElementById('ad-error');
-
   if (!root) { showErr(errEl, 'Root domain is required.'); return; }
   if (!isApex && !subdomain) { showErr(errEl, 'Subdomain label is required.'); return; }
   if (!profileId) { showErr(errEl, 'Select a cPanel profile.'); return; }
   if (!zoneId)    { showErr(errEl, 'Select a Cloudflare zone.'); return; }
-
   try {
-    await POST('/api/domains', {
-      root_domain: root,
-      subdomain,
-      is_wildcard: wildcard,
-      cpanel_profile_id: profileId,
-      cloudflare_zone_id: zoneId,
-      deploy_target: deployTgt,
-    });
+    await POST('/api/domains', { root_domain: root, subdomain, is_wildcard: wildcard, cpanel_profile_id: profileId, cloudflare_zone_id: zoneId, deploy_target: deployTgt });
     addDomainOverlay.classList.add('hidden');
     await loadDomains();
   } catch (e) {
@@ -380,15 +348,11 @@ function openLogModal(domainId, operation, fqdn) {
   document.getElementById('log-spinner').style.display = 'block';
   document.getElementById('close-log-btn').disabled = true;
   document.getElementById('close-log').disabled = true;
-
   logOverlay.classList.remove('hidden');
-
   if (_activeSSE) { _activeSSE.close(); _activeSSE = null; }
-
   const url = `/api/domains/${domainId}/${operation}`;
   const es = new EventSource(url);
   _activeSSE = es;
-
   es.onmessage = e => {
     const msg = JSON.parse(e.data);
     if (msg.type === 'log') {
@@ -400,8 +364,7 @@ function openLogModal(domainId, operation, fqdn) {
       _activeSSE = null;
       document.getElementById('log-spinner').style.display = 'none';
       if (msg.status === 'ACTIVE') {
-        document.getElementById('log-status-text').textContent =
-          `Done — certificate active. Expires: ${msg.expiry || 'unknown'}`;
+        document.getElementById('log-status-text').textContent = `Done — certificate active. Expires: ${msg.expiry || 'unknown'}`;
         appendLogLine(terminal, `\n✓ Certificate issued successfully. Expires: ${msg.expiry || 'unknown'}`, 'success');
       } else {
         document.getElementById('log-status-text').textContent = 'Operation failed — see log above.';
@@ -412,7 +375,6 @@ function openLogModal(domainId, operation, fqdn) {
       loadDomains();
     }
   };
-
   es.onerror = () => {
     es.close();
     _activeSSE = null;
@@ -464,11 +426,7 @@ async function loadCredentials() {
 function renderCFTable() {
   const tbody = document.getElementById('cf-tbody');
   const empty = document.getElementById('cf-empty');
-  if (!state.cfZones.length) {
-    tbody.innerHTML = '';
-    empty.classList.remove('hidden');
-    return;
-  }
+  if (!state.cfZones.length) { tbody.innerHTML = ''; empty.classList.remove('hidden'); return; }
   empty.classList.add('hidden');
   tbody.innerHTML = state.cfZones.map(z => `
     <tr>
@@ -488,26 +446,16 @@ document.getElementById('cf-tbody').addEventListener('click', async e => {
   const testBtn = e.target.closest('[data-cf-test]');
   const editBtn = e.target.closest('[data-cf-edit]');
   const delBtn  = e.target.closest('[data-cf-del]');
-
   if (testBtn) {
     const id = parseInt(testBtn.dataset.cfTest);
     testBtn.textContent = 'Testing…';
     testBtn.className = 'btn-test';
     try {
       const res = await POST(`/api/credentials/cloudflare/${id}/test`);
-      if (res.ok) {
-        testBtn.textContent = `✓ OK (${res.zone_name || 'verified'})`;
-        testBtn.className = 'btn-test pass';
-      } else {
-        testBtn.textContent = `✗ ${res.error}`;
-        testBtn.className = 'btn-test fail';
-      }
-    } catch (err) {
-      testBtn.textContent = `✗ ${err.message}`;
-      testBtn.className = 'btn-test fail';
-    }
+      if (res.ok) { testBtn.textContent = `✓ OK (${res.zone_name || 'verified'})`; testBtn.className = 'btn-test pass'; }
+      else        { testBtn.textContent = `✗ ${res.error}`; testBtn.className = 'btn-test fail'; }
+    } catch (err) { testBtn.textContent = `✗ ${err.message}`; testBtn.className = 'btn-test fail'; }
   }
-
   if (editBtn) {
     const id = parseInt(editBtn.dataset.cfEdit);
     const z  = state.cfZones.find(z => z.id === id);
@@ -521,9 +469,8 @@ document.getElementById('cf-tbody').addEventListener('click', async e => {
     document.getElementById('cf-modal-error').classList.add('hidden');
     document.getElementById('cf-modal-overlay').classList.remove('hidden');
   }
-
   if (delBtn) {
-    const id   = parseInt(delBtn.dataset.cfDel);
+    const id = parseInt(delBtn.dataset.cfDel);
     const name = delBtn.dataset.name;
     confirm_(`Delete Cloudflare zone "${name}"?`, async () => {
       await DELETE(`/api/credentials/cloudflare/${id}`);
@@ -532,7 +479,6 @@ document.getElementById('cf-tbody').addEventListener('click', async e => {
   }
 });
 
-// CF modal
 const cfOverlay = document.getElementById('cf-modal-overlay');
 
 document.getElementById('add-cf-btn').addEventListener('click', () => {
@@ -554,11 +500,9 @@ document.getElementById('save-cf-modal').addEventListener('click', async () => {
   const zoneId = document.getElementById('cf-zone-id').value.trim();
   const token  = document.getElementById('cf-token').value.trim();
   const errEl  = document.getElementById('cf-modal-error');
-
   if (!name)   { showErr(errEl, 'Zone name is required.'); return; }
   if (!zoneId) { showErr(errEl, 'Zone ID is required.'); return; }
   if (!state.editingCfId && !token) { showErr(errEl, 'API token is required.'); return; }
-
   try {
     if (state.editingCfId) {
       const body = { zone_name: name, cf_zone_id: zoneId };
@@ -569,9 +513,7 @@ document.getElementById('save-cf-modal').addEventListener('click', async () => {
     }
     cfOverlay.classList.add('hidden');
     await loadCredentials();
-  } catch (e) {
-    showErr(errEl, e.message);
-  }
+  } catch (e) { showErr(errEl, e.message); }
 });
 
 // ── cPanel profile table ────────────────────────────────────────────────────────────────────────
@@ -579,11 +521,7 @@ document.getElementById('save-cf-modal').addEventListener('click', async () => {
 function renderCPTable() {
   const tbody = document.getElementById('cp-tbody');
   const empty = document.getElementById('cp-empty');
-  if (!state.cpProfiles.length) {
-    tbody.innerHTML = '';
-    empty.classList.remove('hidden');
-    return;
-  }
+  if (!state.cpProfiles.length) { tbody.innerHTML = ''; empty.classList.remove('hidden'); return; }
   empty.classList.add('hidden');
   tbody.innerHTML = state.cpProfiles.map(p => `
     <tr>
@@ -606,33 +544,22 @@ document.getElementById('cp-tbody').addEventListener('click', async e => {
   const testBtn = e.target.closest('[data-cp-test]');
   const editBtn = e.target.closest('[data-cp-edit]');
   const delBtn  = e.target.closest('[data-cp-del]');
-
   if (testBtn) {
     const id = parseInt(testBtn.dataset.cpTest);
     testBtn.textContent = 'Testing…';
     testBtn.className = 'btn-test';
     try {
       const res = await POST(`/api/credentials/cpanel/${id}/test`);
-      if (res.ok) {
-        testBtn.textContent = '✓ Connected';
-        testBtn.className = 'btn-test pass';
-      } else {
-        testBtn.textContent = `✗ ${res.error}`;
-        testBtn.className = 'btn-test fail';
-      }
-    } catch (err) {
-      testBtn.textContent = `✗ ${err.message}`;
-      testBtn.className = 'btn-test fail';
-    }
+      if (res.ok) { testBtn.textContent = '✓ Connected'; testBtn.className = 'btn-test pass'; }
+      else        { testBtn.textContent = `✗ ${res.error}`; testBtn.className = 'btn-test fail'; }
+    } catch (err) { testBtn.textContent = `✗ ${err.message}`; testBtn.className = 'btn-test fail'; }
   }
-
   if (editBtn) {
     const id = parseInt(editBtn.dataset.cpEdit);
     const p  = state.cpProfiles.find(p => p.id === id);
     if (!p) return;
     state.editingCpId = id;
     state.cpAuthMethod = p.auth_method;
-
     document.getElementById('cp-modal-title').textContent = 'Edit cPanel Profile';
     document.getElementById('cp-name').value        = p.profile_name;
     document.getElementById('cp-hostname').value    = p.cpanel_hostname;
@@ -645,9 +572,8 @@ document.getElementById('cp-tbody').addEventListener('click', async e => {
     document.getElementById('cp-modal-error').classList.add('hidden');
     document.getElementById('cp-modal-overlay').classList.remove('hidden');
   }
-
   if (delBtn) {
-    const id   = parseInt(delBtn.dataset.cpDel);
+    const id = parseInt(delBtn.dataset.cpDel);
     const name = delBtn.dataset.name;
     confirm_(`Delete cPanel profile "${name}"?`, async () => {
       await DELETE(`/api/credentials/cpanel/${id}`);
@@ -656,7 +582,6 @@ document.getElementById('cp-tbody').addEventListener('click', async e => {
   }
 });
 
-// CP modal
 const cpOverlay = document.getElementById('cp-modal-overlay');
 
 document.getElementById('add-cp-btn').addEventListener('click', () => {
@@ -700,12 +625,10 @@ document.getElementById('save-cp-modal').addEventListener('click', async () => {
   const credential  = document.getElementById('cp-credential').value.trim();
   const addonSuffix = document.getElementById('cp-addon-suffix').value.trim();
   const errEl       = document.getElementById('cp-modal-error');
-
   if (!name)     { showErr(errEl, 'Profile name is required.'); return; }
   if (!hostname) { showErr(errEl, 'Hostname is required.'); return; }
   if (!username) { showErr(errEl, 'Username is required.'); return; }
   if (!state.editingCpId && !credential) { showErr(errEl, 'Credential is required.'); return; }
-
   try {
     const body = {
       profile_name: name,
@@ -715,7 +638,6 @@ document.getElementById('save-cp-modal').addEventListener('click', async () => {
       addon_domain_suffix: addonSuffix || null,
     };
     if (credential) body.credential = credential;
-
     if (state.editingCpId) {
       await PUT(`/api/credentials/cpanel/${state.editingCpId}`, body);
     } else {
@@ -723,9 +645,7 @@ document.getElementById('save-cp-modal').addEventListener('click', async () => {
     }
     cpOverlay.classList.add('hidden');
     await loadCredentials();
-  } catch (e) {
-    showErr(errEl, e.message);
-  }
+  } catch (e) { showErr(errEl, e.message); }
 });
 
 // ── Renewal History ─────────────────────────────────────────────────────────────────────────
@@ -736,37 +656,25 @@ async function loadHistory() {
   const params = new URLSearchParams();
   if (domain) params.set('domain', domain);
   if (result) params.set('result', result);
-
   try {
     const records = await GET(`/api/history?${params}`);
     state.history = records;
     renderHistoryTable();
-  } catch (e) {
-    console.error('Failed to load history', e);
-  }
+  } catch (e) { console.error('Failed to load history', e); }
 }
 
 function renderHistoryTable() {
   const tbody = document.getElementById('history-tbody');
   const empty = document.getElementById('history-empty');
-
-  if (!state.history.length) {
-    tbody.innerHTML = '';
-    empty.classList.remove('hidden');
-    return;
-  }
+  if (!state.history.length) { tbody.innerHTML = ''; empty.classList.remove('hidden'); return; }
   empty.classList.add('hidden');
-
   tbody.innerHTML = state.history.map(h => {
     const rc = h.result === 'success'
       ? '<span class="result-success">SUCCESS</span>'
       : '<span class="result-failure">FAILURE</span>';
     const by = h.triggered_by === 'manual' ? 'Manual' : 'Scheduler';
     const hasLog = h.log_output && h.log_output.trim().length > 0;
-    const expandBtn = hasLog
-      ? `<button class="expand-btn" data-expand="${h.id}">▶ View log</button>`
-      : '—';
-
+    const expandBtn = hasLog ? `<button class="expand-btn" data-expand="${h.id}">▶ View log</button>` : '—';
     return `<tr id="hist-row-${h.id}">
       <td class="td-mono" style="font-size:11px;white-space:nowrap">${fmtDatetime(h.created_at)}</td>
       <td class="td-mono" style="font-size:12px">${escHtml(h.domain_fqdn)}</td>
@@ -781,7 +689,7 @@ function renderHistoryTable() {
 document.getElementById('history-tbody').addEventListener('click', e => {
   const btn = e.target.closest('[data-expand]');
   if (!btn) return;
-  const id     = btn.dataset.expand;
+  const id = btn.dataset.expand;
   const logRow = document.getElementById(`hist-log-${id}`);
   if (!logRow) return;
   const hidden = logRow.classList.toggle('hidden');

@@ -23,11 +23,6 @@ def _ts() -> str:
 
 
 async def _stream(cmd: list[str], env: dict) -> AsyncGenerator[tuple[str, int], None]:
-    """
-    Run *cmd* with the merged environment and yield (line, returncode) pairs.
-    returncode is -1 for every line except the final sentinel where it holds
-    the real exit code of the subprocess.
-    """
     full_env = {**os.environ, **env}
     process = await asyncio.create_subprocess_exec(
         *cmd,
@@ -44,7 +39,7 @@ async def _stream(cmd: list[str], env: dict) -> AsyncGenerator[tuple[str, int], 
         yield (f"[{_ts()}] {line}", -1)
 
     rc = await process.wait()
-    yield ("", rc)  # sentinel
+    yield ("", rc)
 
 
 async def issue_cert(
@@ -54,11 +49,6 @@ async def issue_cert(
     cf_zone_id: str,
     acme_email: str,
 ) -> AsyncGenerator[tuple[str, int], None]:
-    """
-    Issue a new certificate via Cloudflare DNS challenge.
-    For wildcard domains the command adds both *.root and root itself.
-    Yields (log_line, returncode) — returncode == -1 until the final tuple.
-    """
     cmd = [
         ACME_SH,
         "--home", ACME_HOME,
@@ -84,10 +74,6 @@ async def renew_cert(
     cf_zone_id: str,
     acme_email: str,
 ) -> AsyncGenerator[tuple[str, int], None]:
-    """
-    Force-renew an existing certificate.
-    Yields (log_line, returncode) — returncode == -1 until the final tuple.
-    """
     cmd = [
         ACME_SH,
         "--home", ACME_HOME,
@@ -115,14 +101,11 @@ async def deploy_cert(
 ) -> AsyncGenerator[tuple[str, int], None]:
     """
     Deploy an already-issued certificate to cPanel via its UAPI HTTP endpoint.
-    POSTs cert/key/cabundle to https://{host}:2083/execute/SSL/install_ssl.
     If addon_domain_suffix is set, also installs on the internal addon vhost
     (e.g. darkrosedeli.lankamerica.com) so HTTPS activates for addon domains.
-    Yields (log_line, returncode) — returncode == -1 until the final tuple.
     """
     import httpx
 
-    # acme.sh stores ECC certs in {fqdn}_ecc, RSA certs in {fqdn}
     ecc_dir = os.path.join(ACME_HOME, f"{fqdn}_ecc")
     rsa_dir = os.path.join(ACME_HOME, fqdn)
     cert_dir = ecc_dir if os.path.isdir(ecc_dir) else rsa_dir
@@ -161,8 +144,6 @@ async def deploy_cert(
                 yield ("", 1)
                 return
 
-            # For addon domains, also install on the internal vhost
-            # e.g. darkrosedeli.com + suffix lankamerica.com → darkrosedeli.lankamerica.com
             if addon_domain_suffix:
                 root_label  = fqdn.split(".")[0]
                 addon_vhost = f"{root_label}.{addon_domain_suffix}"
@@ -188,13 +169,8 @@ async def deploy_cert(
 
 
 def parse_expiry_from_acme_info(fqdn: str) -> datetime | None:
-    """
-    Read the cert file for *fqdn* and return the expiry datetime.
-    Returns None if the cert file is not found.
-    """
     import subprocess
 
-    # Check ECC dir first, then RSA dir
     ecc_cert = os.path.join(ACME_HOME, f"{fqdn}_ecc", f"{fqdn}.cer")
     rsa_cert  = os.path.join(ACME_HOME, fqdn, f"{fqdn}.cer")
     if os.path.exists(ecc_cert):
